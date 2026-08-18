@@ -1,4 +1,4 @@
-# capture-detector
+# Capture Detector
 
 ![Example](https://github.com/AsoiX-exe/capture-detector/blob/master/blockscreen.png)
 
