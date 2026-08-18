@@ -1,5 +1,7 @@
 # capture-detector
 
+![Example](https://github.com/AsoiX-exe/capture-detector/blob/master/blockscreen.png)
+
 A small tool that shows which of your open windows are **hidden from screenshots
 and screen recording**.
 
