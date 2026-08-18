@@ -42,7 +42,7 @@ static void add_win(int prot, const char *aff, unsigned long pid,
     if (prot) nprot++;
 }
 
-// pad a utf-8 string to `width` visible columns (counts code points, not bytes)
+// pad text to n columns, counting chars not bytes so utf8 stays lined up
 static void field(const char *s, int width) {
     int total = 0;
     for (const char *q = s; *q; ++q)
