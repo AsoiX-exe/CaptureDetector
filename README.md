@@ -20,23 +20,28 @@ disappears entirely — you still see it with your eyes, but the camera doesn't.
 This is used by DRM video players, secure document viewers, banking apps… and
 sometimes by **malware** that hides its own window from being recorded.
 
-`capscan` is an X-ray for that flag. It walks every open window and reports whether
-each one is protected from capture — without changing anything.
+`capscan` is an X-ray for that flag. It walks every open window, puts the hidden
+ones front and center (in red), and lists the rest below — without changing
+anything.
 
 ```
-  capscan - screen capture protection scan
-  ====================================================================
-  STATUS     AFFINITY  PID     PROCESS                  TITLE
-  --------------------------------------------------------------------
-  [DETECTED] MONITOR   15940   DoNotCapture.exe         <no title>
-             NONE      14088   chrome.exe               GitHub - Chrome
-             NONE      9228    Яндекс Музыка.exe        Яндекс Музыка
-  ====================================================================
-  RESULT: 1 window(s) HIDDEN from screenshots / screen recording.
-          Rows marked [DETECTED] will NOT show up in a capture.
+  capscan  screen capture protection scanner
+  coded by AsoiX
+
+  !!  1 window(s) HIDDEN from screen capture  !!
+  won't show up in screenshots or screen recording
+
+    HIDDEN   DoNotCapture.exe        MONITOR    pid 15940   <no title>
+
+  other visible windows
+             chrome.exe              NONE       pid 14088   GitHub - Chrome
+             Яндекс Музыка.exe       NONE       pid 9228    Яндекс Музыка
+
+  17 scanned   1 hidden
 ```
 
-Rows marked `[DETECTED]` are protected — they will **not** appear in a capture.
+Hidden windows are shown with a red `HIDDEN` badge up top so they can't blend in
+with everything else.
 
 ## The `AFFINITY` column
 
@@ -83,8 +88,9 @@ capscan [options]
 Protected windows are **always** shown (even untitled ones) so nothing hiding from
 capture can slip past the filter.
 
-On Windows you can also double-click **`run.bat`** — it runs the scan and keeps the
-console window open so you can read the output.
+On Windows, if you double-click `capscan.exe` from Explorer it keeps the window open
+and waits for **Enter** so you can read the output. Run it from a terminal and it
+just prints and exits.
 
 ## How it works
 

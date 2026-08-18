@@ -1,67 +1,52 @@
-/*
- * capscan - Screen Capture Protection Scanner (cross-platform)
- * ---------------------------------------------------------------
- * Lists visible top-level windows and reports whether each one is
- * hidden from screenshots / screen recording ("capture protection").
- *
- * The mechanism differs per OS, so the AFFINITY column means:
- *
- *   Windows : SetWindowDisplayAffinity state
- *               NONE / MONITOR / EXCLUDEFROMCAP
- *   macOS   : CGWindow sharing state
- *               SHARING-NONE (protected) / READONLY / READWRITE
- *   Linux   : N/A - X11/Wayland has no per-window capture-exclusion
- *
- * Windows marked [!] are protected (won't appear in captures).
- *
- * Build:
- *   Windows (MinGW) : gcc capscan.c -o capscan.exe -O2
- *   Windows (MSVC)  : cl capscan.c user32.lib
- *   macOS (clang)   : clang capscan.c -o capscan \
- *                       -framework CoreGraphics -framework CoreFoundation
- *   Linux (gcc)     : gcc capscan.c -o capscan -lX11
- *
- * No elevated privileges required for windows in your own session.
- */
+// capscan - finds windows that are hidden from screen capture
+// (screenshots / screen recording), e.g. DRM overlays or sneaky malware.
+// coded by AsoiX
+
 #include <stdio.h>
 #include <string.h>
 
-static int g_protected_only = 0;
-static int g_include_untitled = 0;
-static int g_count = 0;
-static int g_protected = 0;
+#define C_RESET "\x1b[0m"
+#define C_BOLD  "\x1b[1m"
+#define C_DIM   "\x1b[90m"
+#define C_RED   "\x1b[91m"
+#define C_GRN   "\x1b[92m"
+#define C_YEL   "\x1b[93m"
+#define C_CYA   "\x1b[96m"
 
-static void print_field(const char *s, int width); /* defined below */
+typedef struct {
+    int prot;
+    unsigned long pid;
+    char aff[16];
+    char proc[160];
+    char title[512];
+} win_t;
 
-/* Central reporting + filtering, shared by every platform backend.
- * Rule: protected windows are ALWAYS shown (even without a title);
- * --protected-only hides unprotected ones; untitled unprotected
- * windows are hidden unless --all is given. */
-static void report(int is_protected, const char *affinity, unsigned long pid,
-                   const char *proc, const char *title, int has_title) {
-    if (g_protected_only && !is_protected) return;
-    if (!has_title && !g_include_untitled && !is_protected) return;
+static win_t rows[4096];
+static int nrows = 0;
+static int nprot = 0;
+static int only_protected = 0;
+static int include_untitled = 0;
 
-    printf("  %-10s %-9s %-7lu ",
-           is_protected ? "[DETECTED]" : "",
-           affinity,
-           pid);
-    print_field((proc && proc[0]) ? proc : "?", 24);
-    printf(" %s\n", has_title ? title : "<no title>");
+static void add_win(int prot, const char *aff, unsigned long pid,
+                    const char *proc, const char *title, int has_title) {
+    if (only_protected && !prot) return;
+    if (!has_title && !include_untitled && !prot) return;
+    if (nrows >= 4096) return;
 
-    g_count++;
-    if (is_protected) g_protected++;
+    win_t *w = &rows[nrows++];
+    w->prot = prot;
+    w->pid = pid;
+    snprintf(w->aff, sizeof w->aff, "%s", aff);
+    snprintf(w->proc, sizeof w->proc, "%s", (proc && proc[0]) ? proc : "?");
+    snprintf(w->title, sizeof w->title, "%s", has_title ? title : "<no title>");
+    if (prot) nprot++;
 }
 
-static void enumerate(void); /* implemented per platform below */
-
-/* Print a UTF-8 string in exactly `width` visible columns: pad with spaces
- * if short, truncate with ".." if long. Counts Unicode code points (not
- * bytes) so Cyrillic / accented names line up in the table. */
-static void print_field(const char *s, int width) {
+// pad a utf-8 string to `width` visible columns (counts code points, not bytes)
+static void field(const char *s, int width) {
     int total = 0;
     for (const char *q = s; *q; ++q)
-        if ((*q & 0xC0) != 0x80) total++; /* count code-point starts */
+        if ((*q & 0xC0) != 0x80) total++;
 
     if (total <= width) {
         fputs(s, stdout);
@@ -69,25 +54,18 @@ static void print_field(const char *s, int width) {
     } else {
         int lim = width - 2, c = 0;
         for (const char *p = s; *p; ++p) {
-            if ((*p & 0xC0) != 0x80) {
-                if (c >= lim) break;
-                c++;
-            }
+            if ((*p & 0xC0) != 0x80) { if (c >= lim) break; c++; }
             putchar((unsigned char)*p);
         }
         fputs("..", stdout);
     }
 }
 
+static void enumerate(void);
 
-/* ======================== Windows backend ======================== */
 #if defined(_WIN32)
 #include <windows.h>
-#include <wchar.h>
 
-#ifndef WDA_NONE
-#define WDA_NONE 0x00000000
-#endif
 #ifndef WDA_MONITOR
 #define WDA_MONITOR 0x00000001
 #endif
@@ -95,22 +73,13 @@ static void print_field(const char *s, int width) {
 #define WDA_EXCLUDEFROMCAPTURE 0x00000011
 #endif
 
-static const char *affinity_name(DWORD a) {
-    switch (a) {
-        case WDA_NONE:               return "NONE";
-        case WDA_MONITOR:            return "MONITOR";
-        case WDA_EXCLUDEFROMCAPTURE: return "EXCLUDE";
-        default:                     return "UNKNOWN";
-    }
-}
-
 static void to_utf8(const wchar_t *in, char *out, int cap) {
     if (WideCharToMultiByte(CP_UTF8, 0, in, -1, out, cap, NULL, NULL) == 0)
         out[0] = 0;
     out[cap - 1] = 0;
 }
 
-static void process_image(DWORD pid, char *out, int cap) {
+static void proc_name(DWORD pid, char *out, int cap) {
     out[0] = 0;
     HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
     if (!h) return;
@@ -135,31 +104,42 @@ static BOOL CALLBACK on_window(HWND hwnd, LPARAM lp) {
     title[0] = 0;
     if (len > 0) to_utf8(wtitle, title, sizeof title);
 
-    DWORD aff = WDA_NONE;
+    DWORD aff = 0;
     GetWindowDisplayAffinity(hwnd, &aff);
+    const char *name = aff == 0 ? "NONE"
+                     : aff == WDA_MONITOR ? "MONITOR"
+                     : aff == WDA_EXCLUDEFROMCAPTURE ? "EXCLUDE" : "UNKNOWN";
 
     DWORD pid = 0;
     GetWindowThreadProcessId(hwnd, &pid);
-    char exe[MAX_PATH * 2];
-    process_image(pid, exe, sizeof exe);
+    char exe[320];
+    proc_name(pid, exe, sizeof exe);
 
-    report(aff != WDA_NONE, affinity_name(aff), (unsigned long)pid,
-           exe, title, len > 0);
+    add_win(aff != 0, name, (unsigned long)pid, exe, title, len > 0);
     return TRUE;
 }
 
-static void enumerate(void) {
+static void enumerate(void) { EnumWindows(on_window, 0); }
+
+static void enable_console(void) {
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD m = 0;
+    if (GetConsoleMode(h, &m))
+        SetConsoleMode(h, m | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
     SetConsoleOutputCP(CP_UTF8);
-    EnumWindows(on_window, 0);
 }
 
+// true when double-clicked from explorer (we own the console alone)
+static int own_console(void) {
+    DWORD pids[2];
+    return GetConsoleProcessList(pids, 2) <= 1;
+}
 
-/* ======================== macOS backend ========================= */
 #elif defined(__APPLE__)
 #include <CoreGraphics/CoreGraphics.h>
 #include <CoreFoundation/CoreFoundation.h>
 
-static void cfstr_utf8(CFStringRef s, char *out, int cap) {
+static void cfstr(CFStringRef s, char *out, int cap) {
     out[0] = 0;
     if (s) CFStringGetCString(s, out, cap, kCFStringEncodingUTF8);
 }
@@ -171,45 +151,38 @@ static long dict_int(CFDictionaryRef d, CFStringRef key) {
     return v;
 }
 
-/* macOS: kCGWindowSharingNone(0) means the window is NOT shared to other
- * apps, i.e. excluded from capture. Reading window titles may require the
- * Screen Recording permission; owner name and pid do not. */
+// on mac, sharing state 0 (none) means the window is kept out of captures
 static void enumerate(void) {
     CFArrayRef list = CGWindowListCopyWindowInfo(
         kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
         kCGNullWindowID);
-    if (!list) { fprintf(stderr, "CGWindowListCopyWindowInfo failed\n"); return; }
-
+    if (!list) return;
     for (CFIndex i = 0, n = CFArrayGetCount(list); i < n; ++i) {
         CFDictionaryRef w = (CFDictionaryRef)CFArrayGetValueAtIndex(list, i);
         long sharing = dict_int(w, kCGWindowSharingState);
         long pid = dict_int(w, kCGWindowOwnerPID);
-
-        char proc[256], title[512];
-        cfstr_utf8((CFStringRef)CFDictionaryGetValue(w, kCGWindowOwnerName),
-                   proc, sizeof proc);
+        char proc[160], title[512];
+        cfstr((CFStringRef)CFDictionaryGetValue(w, kCGWindowOwnerName), proc, sizeof proc);
         title[0] = 0;
         CFStringRef nm = (CFStringRef)CFDictionaryGetValue(w, kCGWindowName);
         int has_title = nm && CFStringGetLength(nm) > 0;
-        if (has_title) cfstr_utf8(nm, title, sizeof title);
-
-        const char *aff = sharing == 0 ? "SHARING-NONE"
-                        : sharing == 1 ? "READONLY" : "READWRITE";
-        report(sharing == 0, aff, (unsigned long)pid, proc, title, has_title);
+        if (has_title) cfstr(nm, title, sizeof title);
+        const char *aff = sharing == 0 ? "NO-SHARE" : sharing == 1 ? "READONLY" : "READWRITE";
+        add_win(sharing == 0, aff, (unsigned long)pid, proc, title, has_title);
     }
     CFRelease(list);
 }
 
-/* ======================== Linux (X11) backend =================== */
+static void enable_console(void) {}
+static int own_console(void) { return 0; }
+
 #elif defined(__linux__)
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 
-static unsigned char *get_prop(Display *d, Window w, Atom prop, Atom type,
-                               unsigned long *nitems) {
-    Atom rtype; int rfmt; unsigned long bytes; unsigned char *data = NULL;
-    if (XGetWindowProperty(d, w, prop, 0, (~0L), False, type,
-                           &rtype, &rfmt, nitems, &bytes, &data) != Success)
+static unsigned char *xprop(Display *d, Window w, Atom prop, Atom type, unsigned long *n) {
+    Atom rt; int rf; unsigned long rb; unsigned char *data = NULL;
+    if (XGetWindowProperty(d, w, prop, 0, (~0L), False, type, &rt, &rf, n, &rb, &data) != Success)
         return NULL;
     return data;
 }
@@ -225,84 +198,103 @@ static void proc_name(long pid, char *out, int cap) {
     fclose(f);
 }
 
-/* Linux: X11/Wayland has no per-window "exclude from capture" flag, so
- * affinity is reported as N/A. We still enumerate managed top-level
- * windows via _NET_CLIENT_LIST for parity with the other platforms. */
+// x11 has no per-window capture flag, so affinity is always N/A here
 static void enumerate(void) {
     Display *d = XOpenDisplay(NULL);
-    if (!d) { fprintf(stderr, "cannot open X display (Wayland? run under Xorg or set DISPLAY)\n"); return; }
-
+    if (!d) { fprintf(stderr, "no X display\n"); return; }
     Window root = DefaultRootWindow(d);
-    Atom net_client = XInternAtom(d, "_NET_CLIENT_LIST", False);
-    Atom net_name   = XInternAtom(d, "_NET_WM_NAME", False);
-    Atom utf8       = XInternAtom(d, "UTF8_STRING", False);
-    Atom net_pid    = XInternAtom(d, "_NET_WM_PID", False);
-
+    Atom cl = XInternAtom(d, "_NET_CLIENT_LIST", False);
+    Atom nm = XInternAtom(d, "_NET_WM_NAME", False);
+    Atom u8 = XInternAtom(d, "UTF8_STRING", False);
+    Atom pa = XInternAtom(d, "_NET_WM_PID", False);
     unsigned long n = 0;
-    Window *wins = (Window *)get_prop(d, root, net_client, XA_WINDOW, &n);
-    if (!wins) { fprintf(stderr, "WM does not expose _NET_CLIENT_LIST\n"); XCloseDisplay(d); return; }
-
+    Window *wins = (Window *)xprop(d, root, cl, XA_WINDOW, &n);
+    if (!wins) { XCloseDisplay(d); return; }
     for (unsigned long i = 0; i < n; ++i) {
-        Window w = wins[i];
         char title[512]; title[0] = 0; int has_title = 0;
         unsigned long tn = 0;
-        unsigned char *t = get_prop(d, w, net_name, utf8, &tn);
-        if (t) { strncpy(title, (char *)t, sizeof title - 1); has_title = title[0] != 0; XFree(t); }
-        if (!has_title) {
-            char *wn = NULL;
-            if (XFetchName(d, w, &wn) && wn) { strncpy(title, wn, sizeof title - 1); has_title = title[0] != 0; XFree(wn); }
-        }
+        unsigned char *t = xprop(d, wins[i], nm, u8, &tn);
+        if (t) { snprintf(title, sizeof title, "%s", (char *)t); has_title = title[0] != 0; XFree(t); }
         long pid = 0; unsigned long pn = 0;
-        unsigned char *p = get_prop(d, w, net_pid, XA_CARDINAL, &pn);
+        unsigned char *p = xprop(d, wins[i], pa, XA_CARDINAL, &pn);
         if (p) { pid = (long)*(unsigned long *)p; XFree(p); }
-        char proc[256]; proc_name(pid, proc, sizeof proc);
-        report(0, "N/A", (unsigned long)pid, proc, title, has_title);
+        char proc[160]; proc_name(pid, proc, sizeof proc);
+        add_win(0, "N/A", (unsigned long)pid, proc, title, has_title);
     }
     XFree(wins);
     XCloseDisplay(d);
 }
 
-/* ======================== unsupported =========================== */
+static void enable_console(void) {}
+static int own_console(void) { return 0; }
+
 #else
-static void enumerate(void) { fprintf(stderr, "capscan: unsupported platform\n"); }
+static void enumerate(void) { fprintf(stderr, "unsupported platform\n"); }
+static void enable_console(void) {}
+static int own_console(void) { return 0; }
 #endif
 
-/* ============================ main ============================== */
+#define C_ONRED "\x1b[41m\x1b[97m\x1b[1m"   // bold white on red
+
+static void print_row(const win_t *w, int prot) {
+    if (prot) {
+        printf("   " C_ONRED " HIDDEN " C_RESET "  " C_RED C_BOLD);
+        field(w->proc, 22);
+        printf(C_RESET "  " C_YEL "%-9s" C_RESET "  " C_DIM "pid %-6lu" C_RESET "  %s\n",
+               w->aff, w->pid, w->title);
+    } else {
+        printf("             " C_DIM);
+        field(w->proc, 22);
+        printf("  %-9s  pid %-6lu  %s" C_RESET "\n", w->aff, w->pid, w->title);
+    }
+}
+
 int main(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
-        if (!strcmp(argv[i], "--protected-only") || !strcmp(argv[i], "-p"))
-            g_protected_only = 1;
-        else if (!strcmp(argv[i], "--all") || !strcmp(argv[i], "-a"))
-            g_include_untitled = 1;
-        else if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h")) {
-            printf("capscan - screen capture protection scanner\n\n"
-                   "usage: capscan [options]\n"
-                   "  -p, --protected-only  show only capture-protected windows\n"
-                   "  -a, --all             include windows without a title\n"
-                   "  -h, --help            this help\n");
+        if (!strcmp(argv[i], "-p") || !strcmp(argv[i], "--protected-only"))
+            only_protected = 1;
+        else if (!strcmp(argv[i], "-a") || !strcmp(argv[i], "--all"))
+            include_untitled = 1;
+        else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+            printf("capscan [-p only-protected] [-a include-untitled]\n");
             return 0;
-        } else {
-            fprintf(stderr, "unknown option: %s (try --help)\n", argv[i]);
-            return 2;
         }
     }
 
-    printf("\n  capscan - screen capture protection scan\n");
-    printf("  ====================================================================\n");
-    printf("  %-10s %-9s %-7s ", "STATUS", "AFFINITY", "PID");
-    print_field("PROCESS", 24);
-    printf(" %s\n", "TITLE");
-    printf("  --------------------------------------------------------------------\n");
+    enable_console();
     enumerate();
-    printf("  ====================================================================\n");
-    if (g_protected > 0)
-        printf("  RESULT: %d window(s) HIDDEN from screenshots / screen recording.\n"
-               "          Rows marked [DETECTED] will NOT show up in a capture.\n",
-               g_protected);
-    else
-        printf("  RESULT: nothing hidden - all %d window(s) are capturable.\n", g_count);
+
+    printf("\n  " C_CYA C_BOLD "capscan" C_RESET C_CYA
+           "  screen capture protection scanner" C_RESET "\n");
+    printf("  " C_DIM "coded by AsoiX" C_RESET "\n\n");
+
+    if (nprot > 0) {
+        printf("  " C_RED C_BOLD "!!  %d window(s) HIDDEN from screen capture  !!"
+               C_RESET "\n", nprot);
+        printf("  " C_DIM "won't show up in screenshots or screen recording" C_RESET "\n\n");
+        for (int i = 0; i < nrows; ++i)
+            if (rows[i].prot) print_row(&rows[i], 1);
+        printf("\n");
+    } else {
+        printf("  " C_GRN C_BOLD "OK  nothing is hidden - every window is capturable"
+               C_RESET "\n\n");
+    }
+
+    if (!only_protected) {
+        printf("  " C_DIM "other visible windows" C_RESET "\n");
+        for (int i = 0; i < nrows; ++i)
+            if (!rows[i].prot) print_row(&rows[i], 0);
+    }
+
+    printf("\n  " C_DIM "%d scanned" C_RESET "   ", nrows);
+    if (nprot > 0) printf(C_RED C_BOLD "%d hidden" C_RESET "\n", nprot);
+    else printf(C_GRN "0 hidden" C_RESET "\n");
+
+    if (own_console()) {
+        printf("\n  " C_DIM "press Enter to exit..." C_RESET);
+        fflush(stdout);
+        getchar();
+    }
     return 0;
 }
-
-
 
