@@ -1,5 +1,5 @@
 *.exe
 *.o
 *.obj
-capscan
-!capscan.c
+capture-detector
+!capture-detector.c

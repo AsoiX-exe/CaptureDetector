@@ -1,4 +1,4 @@
-// capscan - finds windows that are hidden from screen capture
+// capture-detector - finds windows that are hidden from screen capture
 // (screenshots / screen recording), e.g. DRM overlays or sneaky malware.
 // coded by AsoiX
 
@@ -256,7 +256,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(argv[i], "-a") || !strcmp(argv[i], "--all"))
             include_untitled = 1;
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-            printf("capscan [-p only-protected] [-a include-untitled]\n");
+            printf("capture-detector [-p only-protected] [-a include-untitled]\n");
             return 0;
         }
     }
@@ -264,7 +264,7 @@ int main(int argc, char **argv) {
     enable_console();
     enumerate();
 
-    printf("\n  " C_CYA C_BOLD "capscan" C_RESET C_CYA
+    printf("\n  " C_CYA C_BOLD "capture-detector" C_RESET C_CYA
            "  screen capture protection scanner" C_RESET "\n");
     printf("  " C_DIM "coded by AsoiX" C_RESET "\n\n");
 
