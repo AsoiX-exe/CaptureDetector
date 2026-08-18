@@ -24,16 +24,19 @@ sometimes by **malware** that hides its own window from being recorded.
 each one is protected from capture — without changing anything.
 
 ```
-    AFFINITY        PID        PROCESS                  TITLE
-    --------------------------------------------------------------------
-    NONE            pid=14088  chrome.exe               GitHub — Chrome
-[!] EXCLUDEFROMCAP  pid=5678   SecureViewer.exe         Protected Document
-[!] MONITOR         pid=15940  DoNotCapture.exe         <no title>
-
-scanned 25 window(s), 2 capture-protected
+  capscan - screen capture protection scan
+  ====================================================================
+  STATUS     AFFINITY  PID     PROCESS                  TITLE
+  --------------------------------------------------------------------
+  [DETECTED] MONITOR   15940   DoNotCapture.exe         <no title>
+             NONE      14088   chrome.exe               GitHub - Chrome
+             NONE      9228    Яндекс Музыка.exe        Яндекс Музыка
+  ====================================================================
+  RESULT: 1 window(s) HIDDEN from screenshots / screen recording.
+          Rows marked [DETECTED] will NOT show up in a capture.
 ```
 
-Lines marked `[!]` are protected — they will **not** appear in a capture.
+Rows marked `[DETECTED]` are protected — they will **not** appear in a capture.
 
 ## The `AFFINITY` column
 
@@ -42,7 +45,7 @@ state:
 
 | OS | API | Values | Protected when |
 |----|-----|--------|----------------|
-| **Windows** | `GetWindowDisplayAffinity` | `NONE`, `MONITOR`, `EXCLUDEFROMCAP` | not `NONE` |
+| **Windows** | `GetWindowDisplayAffinity` | `NONE`, `MONITOR`, `EXCLUDE` | not `NONE` |
 | **macOS** | `CGWindow` sharing state | `SHARING-NONE`, `READONLY`, `READWRITE` | `SHARING-NONE` |
 | **Linux** | — | `N/A` | never* |
 
@@ -79,6 +82,9 @@ capscan [options]
 
 Protected windows are **always** shown (even untitled ones) so nothing hiding from
 capture can slip past the filter.
+
+On Windows you can also double-click **`run.bat`** — it runs the scan and keeps the
+console window open so you can read the output.
 
 ## How it works
 

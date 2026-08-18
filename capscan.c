@@ -31,6 +31,8 @@ static int g_include_untitled = 0;
 static int g_count = 0;
 static int g_protected = 0;
 
+static void print_field(const char *s, int width); /* defined below */
+
 /* Central reporting + filtering, shared by every platform backend.
  * Rule: protected windows are ALWAYS shown (even without a title);
  * --protected-only hides unprotected ones; untitled unprotected
@@ -40,18 +42,43 @@ static void report(int is_protected, const char *affinity, unsigned long pid,
     if (g_protected_only && !is_protected) return;
     if (!has_title && !g_include_untitled && !is_protected) return;
 
-    printf("%-11s%-15s pid=%-6lu %-24s %s\n",
+    printf("  %-10s %-9s %-7lu ",
            is_protected ? "[DETECTED]" : "",
            affinity,
-           pid,
-           (proc && proc[0]) ? proc : "?",
-           has_title ? title : "<no title>");
+           pid);
+    print_field((proc && proc[0]) ? proc : "?", 24);
+    printf(" %s\n", has_title ? title : "<no title>");
 
     g_count++;
     if (is_protected) g_protected++;
 }
 
 static void enumerate(void); /* implemented per platform below */
+
+/* Print a UTF-8 string in exactly `width` visible columns: pad with spaces
+ * if short, truncate with ".." if long. Counts Unicode code points (not
+ * bytes) so Cyrillic / accented names line up in the table. */
+static void print_field(const char *s, int width) {
+    int total = 0;
+    for (const char *q = s; *q; ++q)
+        if ((*q & 0xC0) != 0x80) total++; /* count code-point starts */
+
+    if (total <= width) {
+        fputs(s, stdout);
+        for (int i = total; i < width; ++i) putchar(' ');
+    } else {
+        int lim = width - 2, c = 0;
+        for (const char *p = s; *p; ++p) {
+            if ((*p & 0xC0) != 0x80) {
+                if (c >= lim) break;
+                c++;
+            }
+            putchar((unsigned char)*p);
+        }
+        fputs("..", stdout);
+    }
+}
+
 
 /* ======================== Windows backend ======================== */
 #if defined(_WIN32)
@@ -72,7 +99,7 @@ static const char *affinity_name(DWORD a) {
     switch (a) {
         case WDA_NONE:               return "NONE";
         case WDA_MONITOR:            return "MONITOR";
-        case WDA_EXCLUDEFROMCAPTURE: return "EXCLUDEFROMCAP";
+        case WDA_EXCLUDEFROMCAPTURE: return "EXCLUDE";
         default:                     return "UNKNOWN";
     }
 }
@@ -93,7 +120,6 @@ static void process_image(DWORD pid, char *out, int cap) {
         wchar_t *name = path;
         for (wchar_t *p = path; *p; ++p)
             if (*p == L'\\' || *p == L'/') name = p + 1;
-        if (wcslen(name) > 23) name[23] = 0; /* cap on char boundary */
         to_utf8(name, out, cap);
     }
     CloseHandle(h);
@@ -125,14 +151,6 @@ static BOOL CALLBACK on_window(HWND hwnd, LPARAM lp) {
 static void enumerate(void) {
     SetConsoleOutputCP(CP_UTF8);
     EnumWindows(on_window, 0);
-}
-
-/* True when we own the console alone, i.e. the program was double-clicked
- * from Explorer rather than started inside an existing cmd/terminal.
- * In that case main() pauses at the end so the output stays readable. */
-static int launched_standalone(void) {
-    DWORD pids[2];
-    return GetConsoleProcessList(pids, 2) <= 1;
 }
 
 
@@ -269,25 +287,20 @@ int main(int argc, char **argv) {
         }
     }
 
-    printf("%-11s%-15s %-10s %-24s %s\n", "STATUS", "AFFINITY", "PID", "PROCESS", "TITLE");
-    printf("    --------------------------------------------------------------------\n");
+    printf("\n  capscan - screen capture protection scan\n");
+    printf("  ====================================================================\n");
+    printf("  %-10s %-9s %-7s ", "STATUS", "AFFINITY", "PID");
+    print_field("PROCESS", 24);
+    printf(" %s\n", "TITLE");
+    printf("  --------------------------------------------------------------------\n");
     enumerate();
-
-    printf("\n----------------------------------------------------------------------\n");
+    printf("  ====================================================================\n");
     if (g_protected > 0)
-        printf("[!] DETECTED: %d window(s) HIDDEN from screenshots / screen recording.\n"
-               "    (lines marked [DETECTED] above will NOT appear in a capture)\n",
+        printf("  RESULT: %d window(s) HIDDEN from screenshots / screen recording.\n"
+               "          Rows marked [DETECTED] will NOT show up in a capture.\n",
                g_protected);
     else
-        printf("[OK] No capture-protected windows found. %d window(s) scanned.\n", g_count);
-
-#if defined(_WIN32)
-    if (launched_standalone()) {
-        printf("\nPress Enter to exit...");
-        fflush(stdout);
-        getchar();
-    }
-#endif
+        printf("  RESULT: nothing hidden - all %d window(s) are capturable.\n", g_count);
     return 0;
 }
 
