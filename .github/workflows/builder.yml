@@ -5,8 +5,6 @@ on:
     branches:
       - master
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * *'
 
 permissions:
   contents: write
@@ -40,9 +38,11 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: Beta
+          tag_name: latest
+          name: Latest build (Windows / macOS / Linux)
           draft: false
-          prerelease: true
+          prerelease: false
+          make_latest: true
           files: CaptureDetector/CaptureDetector-Linux.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -73,9 +73,11 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: Beta
+          tag_name: latest
+          name: Latest build (Windows / macOS / Linux)
           draft: false
-          prerelease: true
+          prerelease: false
+          make_latest: true
           files: CaptureDetector/CaptureDetector-Windows.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -106,9 +108,11 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: Beta
+          tag_name: latest
+          name: Latest build (Windows / macOS / Linux)
           draft: false
-          prerelease: true
+          prerelease: false
+          make_latest: true
           files: CaptureDetector/CaptureDetector-macOS.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
