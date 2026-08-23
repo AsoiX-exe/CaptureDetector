@@ -1,0 +1,114 @@
+name: CaptureDetector CI
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone repository
+        run: git clone https://github.com/AsoiX-exe/CaptureDetector.git
+
+      - name: Install required libs and CMake
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev cmake
+
+      - name: Configure CMake
+        working-directory: ./CaptureDetector
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Project
+        working-directory: ./CaptureDetector
+        run: cmake --build build --config Release
+
+      - name: Package Linux
+        working-directory: ./CaptureDetector
+        run: zip -j CaptureDetector-Linux.zip build/capture-detector
+
+      - name: Upload Linux Release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: Beta
+          draft: false
+          prerelease: true
+          files: CaptureDetector/CaptureDetector-Linux.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Clone repository
+        run: git clone https://github.com/AsoiX-exe/CaptureDetector.git
+
+      - name: Install CMake
+        run: choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
+
+      - name: Configure CMake
+        working-directory: ./CaptureDetector
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Project
+        working-directory: ./CaptureDetector
+        run: cmake --build build --config Release
+
+      - name: Package Windows
+        working-directory: ./CaptureDetector
+        run: Compress-Archive -Path build\Release\capture-detector.exe, build\Release\test_protected.exe -DestinationPath CaptureDetector-Windows.zip
+
+      - name: Upload Windows Release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: Beta
+          draft: false
+          prerelease: true
+          files: CaptureDetector/CaptureDetector-Windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Clone repository
+        run: git clone https://github.com/AsoiX-exe/CaptureDetector.git
+
+      - name: Install CMake
+        run: brew install cmake
+
+      - name: Configure CMake
+        working-directory: ./CaptureDetector
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Project
+        working-directory: ./CaptureDetector
+        run: cmake --build build --config Release
+
+      - name: Package macOS
+        working-directory: ./CaptureDetector
+        run: zip -j CaptureDetector-macOS.zip build/capture-detector
+
+      - name: Upload macOS Release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: Beta
+          draft: false
+          prerelease: true
+          files: CaptureDetector/CaptureDetector-macOS.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
