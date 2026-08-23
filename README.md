@@ -75,6 +75,8 @@ MIT · coded by AsoiX
 Thanks to everyone helping to make CaptureDetector better — much of the build system,
 cross-platform support and CI came from the community.
 
-<a href="https://github.com/BJNFNE"><img src="https://github.com/BJNFNE.png?size=100" width="72" height="72" alt="BJNFNE" title="BJNFNE"></a>
+<a href="https://github.com/AsoiX-exe/CaptureDetector/graphs/contributors">
+<img src="https://readme-contribs.as93.net/contributors/AsoiX-exe/CaptureDetector?textColor=737373&perRow=9&shape=squircle&isResponsive=true" />
+</a>
 
 Want to contribute? See the [contributing guide](https://github.com/AsoiX-exe/CaptureDetector/blob/master/CONTRIBUTING.md).
