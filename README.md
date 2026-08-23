@@ -69,3 +69,15 @@ gcc source/capture-detector.c -o capture-detector -lX11
 ## License
 
 MIT · coded by AsoiX
+
+## 🤝 Thanks to the contributors
+
+For me (**[AsoiX](https://github.com/AsoiX-exe)**), CaptureDetector is more than a small
+utility — it's a tool built to answer one very concrete question: what is quietly keeping
+itself out of your screenshots and recordings. That said, I won't pretend the shape it's in
+today is a one-person job. A lot of what makes it solid — cleaner builds, cross-platform
+support, the awkward edge cases I'd never have caught on my own — grew out of people who
+actually sat down with it, asked the uncomfortable questions and pointed at the things I had
+overlooked. Every pull request, fix, suggestion and bug report along the way moved the project
+a step forward, and I don't take that for granted. If you'd like to be part of it, have a look
+at the [contributing guide](https://github.com/AsoiX-exe/CaptureDetector/blob/master/CONTRIBUTING.md).
