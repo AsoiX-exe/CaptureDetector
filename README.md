@@ -68,7 +68,7 @@ gcc source/capture-detector.c -o capture-detector -lX11
 
 ## License
 
-MIT · coded by AsoiX
+[MIT](LICENSE) · coded by AsoiX
 
 ## 🤝 Contributors
 
