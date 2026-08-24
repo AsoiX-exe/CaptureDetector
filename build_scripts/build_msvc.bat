@@ -1,5 +1,7 @@
 @echo off
 
+cd /d "%~dp0.."
+
 for /f "usebackq delims=" %%V in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do (
     call "%%V\VC\Auxiliary\Build\vcvars64.bat"
 )

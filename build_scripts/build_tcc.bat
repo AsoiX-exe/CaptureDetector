@@ -1,6 +1,8 @@
 @echo off
 setlocal
 
+cd /d "%~dp0.."
+
 set "TCC=C:\tcc\tcc.exe"
 
 if not exist build mkdir build
