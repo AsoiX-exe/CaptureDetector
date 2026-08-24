@@ -263,9 +263,11 @@ int main(int argc, char **argv) {
 
     enable_console();
     enumerate();
-
-    printf("\n  " C_CYA C_BOLD "capture-detector" C_RESET C_CYA
-           "  screen capture protection scanner" C_RESET "\n");
+    
+    char versionNumber[4] = "1.0";
+    
+    printf("\n  " C_CYA C_BOLD "capture-detector %s" C_RESET C_CYA 
+           "  screen capture protection scanner" C_RESET "\n", versionNumber);
     printf("  " C_DIM "coded by AsoiX" C_RESET "\n\n");
 
     if (nprot > 0) {
