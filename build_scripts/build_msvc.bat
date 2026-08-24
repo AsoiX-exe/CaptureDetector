@@ -3,12 +3,24 @@ setlocal
 
 cd /d "%~dp0.."
 
+set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+
+for /f "usebackq delims=" %%V in (`
+    "%VSWHERE%" -latest -products * ^
+    -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 ^
+    -property installationPath
+`) do (
+    call "%%V\VC\Auxiliary\Build\vcvars64.bat"
+)
+
 if not exist build mkdir build
 
 for %%F in (
     source\capture-detector.c
     source\_test_protected.c
 ) do (
+    echo Compiling %%F...
+
     cl "%%F" %FLAGS% /MT /O2 ^
         /Fo:"build\%%~nF.obj" ^
         /Fe:"build\%%~nF.exe" ^
