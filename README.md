@@ -51,20 +51,9 @@ capture-detector -p    only show hidden windows
 capture-detector -a    also show windows with no title
 ```
 
-## Build it yourself
+## Build
 
-No libraries needed, just a C compiler.
-
-```sh
-# Windows (MinGW)
-gcc source/capture-detector.c -o capture-detector.exe -O2
-
-# macOS
-clang source/capture-detector.c -o capture-detector -framework CoreGraphics -framework CoreFoundation
-
-# Linux
-gcc source/capture-detector.c -o capture-detector -lX11
-```
+Click [here](docs/BUILD.md) for more details.
 
 ## License
 
